@@ -825,6 +825,7 @@ async function clearScreen(env, chat) {
 // ---------- messages ----------
 async function onMessage(msg, env) {
   if (msg.chat.type !== 'private') return;
+    if (msg.text === '/ping') return send(env, msg.chat.id, 'pong ✅');
   await clearScreen(env, msg.chat.id);
 
   const cfg = await getConfig(env);
