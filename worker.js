@@ -1,8 +1,8 @@
-// HAREMAYA exam bot v3
-// One screen per chat, one invite link per approved payment, free samples,
-// full admin control. The bot never stores or sends exam files.
+// HAREMAYA exam bot v4
+// Admin panel unlocked by password. Group link shown only to approved students.
+// Students can buy or renew any time. One screen per chat, typed messages get a new reply at the bottom.
 
-const RENEW_WINDOW_DAYS = 3;
+const ADMIN_DEFAULT_PASSWORD = '88';
 const DAY = 86400000;
 
 const DEFAULT_TRACKS = {
@@ -37,7 +37,6 @@ const T = {
     received: '✅ <b>Screenshot received.</b>\nAn admin will confirm your payment shortly.',
     under_review: '⏳ Your payment is under review.',
     send_shot: '📸 Please send a payment screenshot.',
-    too_early: '✅ You already have access until <b>{date}</b>.\nYou can renew starting {window} days before it ends.',
     granted: '🎉 <b>Access granted</b>\nTrack: <b>{track}</b>\nValid until: <b>{date}</b>',
     join_hint: 'Tap the button below to join. Your request is approved automatically.',
     link_ready: '🔗 <b>Your group link</b>\nTrack: <b>{track}</b>\nValid until: <b>{date}</b>\n\nTap the button below to join.',
@@ -71,7 +70,6 @@ const T = {
     received: '✅ <b>ፎቶዎ ደርሶናል።</b>\nአስተዳዳሪ ክፍያውን በቅርቡ ያረጋግጣል።',
     under_review: '⏳ ክፍያዎ እየተረጋገጠ ነው።',
     send_shot: '📸 እባክዎ የክፍያ ፎቶ ይላኩ።',
-    too_early: '✅ መዳረሻ አለዎት እስከ <b>{date}</b>።\nከመጠናቀቁ {window} ቀን ቀደም ብለው ማደስ ይችላሉ።',
     granted: '🎉 <b>መዳረሻ ተሰጥቶዎታል</b>\nትራክ: <b>{track}</b>\nእስከ: <b>{date}</b>',
     join_hint: 'ለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ። ጥያቄዎ በራሱ ይጸድቃል።',
     link_ready: '🔗 <b>የቡድን ሊንክ</b>\nትራክ: <b>{track}</b>\nእስከ: <b>{date}</b>\n\nለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ።',
@@ -102,7 +100,6 @@ const T = {
 const now = () => Date.now();
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const fmtDate = (ms) => new Date(ms).toISOString().slice(0, 10);
-const daysLeft = (u) => (u.expires - now()) / DAY;
 const isActive = (u) => u.status === 'active' && u.expires > now();
 
 // t('en', 'granted', { track, date }) fills {track} and {date}, escaping the values
@@ -151,20 +148,30 @@ async function screen(env, chat, text, markup) {
   return newScreen(env, chat, text, markup);
 }
 
+// Removes the current screen so the next reply appears at the bottom of the chat
+async function clearScreen(env, chat) {
+  const mid = await env.EXAM_KV.get(`scr:${chat}`);
+  if (mid) await API(env, 'deleteMessage', { chat_id: chat, message_id: Number(mid) });
+  await env.EXAM_KV.delete(`scr:${chat}`);
+}
+
 // ---------- menus ----------
-const menuMarkup = (lang) => ({
-  inline_keyboard: [
-    [
-      { text: t(lang, 'btn_buy'), callback_data: 'buy' },
-      { text: t(lang, 'btn_samples'), callback_data: 'samp' },
-    ],
-    [
-      { text: t(lang, 'btn_link'), callback_data: 'link' },
-      { text: t(lang, 'btn_status'), callback_data: 'status' },
-    ],
-    [{ text: t(lang, 'btn_lang'), callback_data: 'lang' }],
-  ],
-});
+// Group link and status show only to students with active access
+const menuMarkup = (lang, showLink) => {
+  const rows = [[
+    { text: t(lang, 'btn_buy'), callback_data: 'buy' },
+    { text: t(lang, 'btn_samples'), callback_data: 'samp' },
+  ]];
+  rows.push(
+    showLink
+      ? [{ text: t(lang, 'btn_link'), callback_data: 'link' }, { text: t(lang, 'btn_status'), callback_data: 'status' }]
+      : [{ text: t(lang, 'btn_status'), callback_data: 'status' }]
+  );
+  rows.push([{ text: t(lang, 'btn_lang'), callback_data: 'lang' }]);
+  return { inline_keyboard: rows };
+};
+
+const menuFor = (lang, u) => menuMarkup(lang, isActive(u));
 
 const backMenu = (lang) => ({
   inline_keyboard: [[{ text: t(lang, 'btn_menu'), callback_data: 'menu' }]],
@@ -197,6 +204,7 @@ const ADMIN_MENU = {
 };
 const ADMIN_BACK = { inline_keyboard: [[{ text: '⬅️ Back to panel', callback_data: 'a:home' }]] };
 const ADMIN_CANCEL = { inline_keyboard: [[{ text: '✖ Cancel', callback_data: 'a:home' }]] };
+const HOME_ONLY = { inline_keyboard: [[{ text: '🏠 Main menu', callback_data: 'menu' }]] };
 
 const adminScreen = (env, chat, notice = '') =>
   screen(
@@ -205,6 +213,19 @@ const adminScreen = (env, chat, notice = '') =>
     `🛠 <b>Admin panel</b>\n━━━━━━━━━━━━━━\n${notice || 'Choose what to manage.'}`,
     ADMIN_MENU
   );
+
+// ---------- admin login ----------
+const adminPass = (env) => String(env.ADMIN_PASSWORD || ADMIN_DEFAULT_PASSWORD);
+const isAuthed = async (env, uid) => (await env.EXAM_KV.get(`auth:${uid}`)) === '1';
+
+async function tryLogin(env, chat, uid, pass) {
+  await env.EXAM_KV.delete(`adm:${uid}`);
+  if (String(pass).trim() !== adminPass(env)) {
+    return screen(env, chat, '❌ Wrong password.', HOME_ONLY);
+  }
+  await env.EXAM_KV.put(`auth:${uid}`, '1', { expirationTtl: 43200 }); // 12 hours
+  return adminScreen(env, chat, '✅ Logged in. Session lasts 12 hours. Send /logout to end it.');
+}
 
 // ---------- settings (saved in KV, editable from the admin panel) ----------
 function defaultConfig(env) {
@@ -226,9 +247,9 @@ async function getConfig(env) {
 }
 
 const saveConfig = (env, cfg) => env.EXAM_KV.put('config', JSON.stringify(cfg));
-const superAdmins = (env) => env.ADMIN_IDS.split(',').map((s) => s.trim()).filter(Boolean);
+const superAdmins = (env) => String(env.ADMIN_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+// Chat IDs that receive payment cards. They still need to log in to press buttons.
 const allAdmins = (env, cfg) => [...new Set([...superAdmins(env), ...cfg.admins.map(String)])];
-const isAdminId = (env, cfg, id) => allAdmins(env, cfg).includes(String(id));
 const validTrack = (cfg, key) => Object.prototype.hasOwnProperty.call(cfg.tracks, key);
 const trackLabel = (cfg, key) => (key && validTrack(cfg, key) ? cfg.tracks[key].name : 'No track yet');
 const findSubject = (cfg, track, key) =>
@@ -244,7 +265,7 @@ async function notifyAdmins(env, cfg, text) {
 async function getUser(env, id) {
   const u = (await env.EXAM_KV.get(`user:${id}`, 'json')) || {};
   if (u.flow === undefined) {
-    // Migrate records saved by the earlier versions of the bot
+    // Migrate records saved by earlier versions of the bot
     u.flow = u.status === 'pending' ? 'pending' : u.status === 'awaiting_proof' ? 'awaiting_proof' : 'none';
     if (u.status === 'pending' || u.status === 'awaiting_proof' || !u.status) {
       u.status = u.expires > now() ? 'active' : 'none';
@@ -327,17 +348,14 @@ async function showWelcome(env, cfg, chat, uid) {
     env,
     chat,
     `${body}\n\n${t(lang, 'access', { price: cfg.price, days: cfg.accessDays })}\n\n${statusLine(cfg, user, lang)}`,
-    menuMarkup(lang)
+    menuFor(lang, user)
   );
 }
 
 async function showBuy(env, cfg, chat, uid) {
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
-  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuMarkup(lang));
-  if (isActive(user) && daysLeft(user) > RENEW_WINDOW_DAYS) {
-    return screen(env, chat, t(lang, 'too_early', { date: fmtDate(user.expires), window: RENEW_WINDOW_DAYS }), menuMarkup(lang));
-  }
+  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuFor(lang, user));
   return screen(env, chat, t(lang, 'choose_track'), trackMarkup(cfg, lang, 'trk', 'menu'));
 }
 
@@ -345,10 +363,7 @@ async function chooseTrack(env, cfg, chat, uid, picked) {
   if (!validTrack(cfg, picked)) return;
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
-  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuMarkup(lang));
-  if (isActive(user) && daysLeft(user) > RENEW_WINDOW_DAYS) {
-    return screen(env, chat, t(lang, 'too_early', { date: fmtDate(user.expires), window: RENEW_WINDOW_DAYS }), menuMarkup(lang));
-  }
+  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuFor(lang, user));
   // Renewals stay on the track the student already has
   const track = isActive(user) && validTrack(cfg, user.track) ? user.track : picked;
   await putUser(env, uid, { ...user, track, flow: 'awaiting_proof' });
@@ -378,14 +393,15 @@ async function submitProof(env, cfg, msg, user) {
       },
     });
   }
-  return screen(env, msg.chat.id, t(lang, 'received'), menuMarkup(lang));
+  return screen(env, msg.chat.id, t(lang, 'received'), menuFor(lang, { ...user, flow: 'pending' }));
 }
 
+// Only students with active access get a link
 async function showLink(env, cfg, chat, uid) {
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
   if (!isActive(user) || !validTrack(cfg, user.track)) {
-    return screen(env, chat, t(lang, 'link_none'), menuMarkup(lang));
+    return screen(env, chat, t(lang, 'link_none'), menuFor(lang, user));
   }
   const url = await ensureLink(env, cfg, uid);
   if (!url) return screen(env, chat, t(lang, 'link_wait'), backMenu(lang));
@@ -443,7 +459,7 @@ async function grantAccess(env, cfg, uid, days) {
     ? await newScreen(env, uid, `${body}\n\n${t(lang, 'join_hint')}`, {
         inline_keyboard: [[{ text: t(lang, 'btn_join'), url }], [{ text: t(lang, 'btn_menu'), callback_data: 'menu' }]],
       })
-    : await newScreen(env, uid, `${body}\n\n${t(lang, 'link_wait')}`, menuMarkup(lang));
+    : await newScreen(env, uid, `${body}\n\n${t(lang, 'link_wait')}`, menuMarkup(lang, true));
 
   if (!r.ok) {
     await notifyAdmins(env, cfg, `⚠️ Access granted to ${uid}, but the bot could not message them. They must press /start in the bot first.`);
@@ -461,7 +477,7 @@ async function revokeAccess(env, cfg, uid) {
     await API(env, 'unbanChatMember', { chat_id: gid, user_id: Number(uid), only_if_banned: true });
   }
   const lang = user.lang || 'en';
-  await newScreen(env, uid, t(lang, 'expired'), menuMarkup(lang));
+  await newScreen(env, uid, t(lang, 'expired'), menuMarkup(lang, false));
 }
 
 async function expireMembers(env) {
@@ -496,7 +512,8 @@ async function handlePayment(env, cfg, q, action, uid) {
   }
 
   await putUser(env, uid, { ...user, flow: 'none' });
-  await screen(env, uid, t(user.lang || 'en', 'rejected'), menuMarkup(user.lang || 'en'));
+  const lang = user.lang || 'en';
+  await screen(env, uid, t(lang, 'rejected'), menuFor(lang, user));
   return resolveCard(env, q, `❌ <b>Rejected</b> by ${by}\nUser: ${esc(uid)}`);
 }
 
@@ -713,7 +730,7 @@ async function adminCallback(env, cfg, q, [op, x, y]) {
       for (const id of cfg.admins) rows.push([{ text: `🗑 ${id}`, callback_data: `a:admdel:${id}` }]);
       rows.push([{ text: '➕ Add admin', callback_data: 'a:admadd' }]);
       rows.push([{ text: '⬅️ Back to panel', callback_data: 'a:home' }]);
-      return screen(env, chat, '👮 <b>Admins</b>\nOwners cannot be removed here.', { inline_keyboard: rows });
+      return screen(env, chat, '👮 <b>Admins</b>\nChat IDs that receive payment cards. Owners cannot be removed here.', { inline_keyboard: rows });
     }
     case 'admadd':
       return ask('admin_add', 'Send the Telegram ID of the new admin.');
@@ -816,17 +833,10 @@ async function adminInput(env, cfg, msg, st) {
   await saveConfig(env, cfg);
   return home('✅ Saved.');
 }
-// Deletes the chat's current screen, so the next reply appears at the bottom
-async function clearScreen(env, chat) {
-  const mid = await env.EXAM_KV.get(`scr:${chat}`);
-  if (mid) await API(env, 'deleteMessage', { chat_id: chat, message_id: Number(mid) });
-  await env.EXAM_KV.delete(`scr:${chat}`);
-}
+
 // ---------- messages ----------
 async function onMessage(msg, env) {
   if (msg.chat.type !== 'private') return;
-    if (msg.text === '/ping') return send(env, msg.chat.id, 'pong ✅');
-  await clearScreen(env, msg.chat.id);
 
   const cfg = await getConfig(env);
   const uid = String(msg.from.id);
@@ -836,14 +846,19 @@ async function onMessage(msg, env) {
   const args = text.split(/\s+/).slice(1);
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
-  const admin = isAdminId(env, cfg, uid);
+  const authed = await isAuthed(env, uid);
 
-  if (cmd.startsWith('/')) {
+  // Replies go to the bottom of the chat
+  await clearScreen(env, chat);
+
+  // Admin password step
+  const st = await env.EXAM_KV.get(`adm:${uid}`, 'json');
+  if (st && !cmd.startsWith('/')) {
+    if (st.step === 'login') return tryLogin(env, chat, uid, text);
+    if (authed) return adminInput(env, cfg, msg, st);
     await env.EXAM_KV.delete(`adm:${uid}`);
-  } else if (admin) {
-    const st = await env.EXAM_KV.get(`adm:${uid}`, 'json');
-    if (st) return adminInput(env, cfg, msg, st);
   }
+  if (cmd.startsWith('/')) await env.EXAM_KV.delete(`adm:${uid}`);
 
   if (cmd === '/start') {
     await putUser(env, uid, { ...user, name: msg.from.first_name || user.name || '' });
@@ -851,22 +866,33 @@ async function onMessage(msg, env) {
     return showWelcome(env, cfg, chat, uid);
   }
 
-  if (admin && cmd === '/admin') return adminScreen(env, chat);
-  if (admin && cmd === '/grant' && args[0]) {
+  if (cmd === '/admin') {
+    if (args[0]) return tryLogin(env, chat, uid, args[0]);
+    if (authed) return adminScreen(env, chat);
+    await env.EXAM_KV.put(`adm:${uid}`, JSON.stringify({ step: 'login' }), { expirationTtl: 600 });
+    return screen(env, chat, '🔐 <b>Admin login</b>\nSend the admin password.', ADMIN_CANCEL);
+  }
+
+  if (cmd === '/logout') {
+    await env.EXAM_KV.delete(`auth:${uid}`);
+    return screen(env, chat, '👋 Logged out of the admin panel.', menuFor(lang, user));
+  }
+
+  if (authed && cmd === '/grant' && args[0]) {
     const r = await grantAccess(env, cfg, args[0], Number(args[1]) > 0 ? Number(args[1]) : cfg.accessDays);
     return adminScreen(env, chat, grantMsg(r, args[0]));
   }
-  if (admin && cmd === '/revoke' && args[0]) {
+  if (authed && cmd === '/revoke' && args[0]) {
     await revokeAccess(env, cfg, args[0]);
     return adminScreen(env, chat, `🚫 Revoked ${esc(args[0])}`);
   }
 
-  if (!user.lang && !admin) return screen(env, chat, T.en.choose_lang, LANG_PICKER);
+  if (!user.lang) return screen(env, chat, T.en.choose_lang, LANG_PICKER);
 
   if (cmd === '/menu') return showWelcome(env, cfg, chat, uid);
   if (cmd === '/buy') return showBuy(env, cfg, chat, uid);
   if (cmd === '/samples') return showSamplePicker(env, cfg, chat, uid);
-  if (cmd === '/status') return screen(env, chat, statusLine(cfg, user, lang), menuMarkup(lang));
+  if (cmd === '/status') return screen(env, chat, statusLine(cfg, user, lang), menuFor(lang, user));
   if (cmd === '/link') return showLink(env, cfg, chat, uid);
   if (cmd === '/lang') return screen(env, chat, T.en.choose_lang, LANG_PICKER);
 
@@ -874,7 +900,7 @@ async function onMessage(msg, env) {
   if (user.flow === 'awaiting_proof' && (msg.photo || msg.document)) {
     return submitProof(env, cfg, msg, user);
   }
-  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuMarkup(lang));
+  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuFor(lang, user));
   if (user.flow === 'awaiting_proof') return screen(env, chat, t(lang, 'send_shot'), backMenu(lang));
 
   return showWelcome(env, cfg, chat, uid);
@@ -889,12 +915,15 @@ async function onCallback(q, env) {
   const action = p[0];
   const a1 = p[1];
   const a2 = p[2];
-  const admin = isAdminId(env, cfg, fromId);
 
-  // Admin-only actions
+  // Admin-only actions need the admin password session
   if (action === 'a' || action === 'ok' || action === 'no') {
-    if (!admin) {
-      return API(env, 'answerCallbackQuery', { callback_query_id: q.id, text: 'Not allowed', show_alert: true });
+    if (!(await isAuthed(env, fromId))) {
+      return API(env, 'answerCallbackQuery', {
+        callback_query_id: q.id,
+        text: 'Admin only. Send /admin, then the password.',
+        show_alert: true,
+      });
     }
     await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
     if (action === 'a') return adminCallback(env, cfg, q, [a1, a2, p[3]]);
@@ -920,7 +949,7 @@ async function onCallback(q, env) {
       return showLink(env, cfg, chat, fromId);
     case 'status': {
       const user = await getUser(env, fromId);
-      return screen(env, chat, statusLine(cfg, user, user.lang || 'en'), menuMarkup(user.lang || 'en'));
+      return screen(env, chat, statusLine(cfg, user, user.lang || 'en'), menuFor(user.lang || 'en', user));
     }
     case 'lang': {
       if (a1 === 'en' || a1 === 'am') {
@@ -949,7 +978,7 @@ async function onJoinRequest(req, env) {
     user_id: req.from.id,
   });
   if (!ok) {
-    await screen(env, req.user_chat_id || req.from.id, t(lang, 'no_access'), menuMarkup(lang));
+    await screen(env, req.user_chat_id || req.from.id, t(lang, 'no_access'), menuFor(lang, user));
   }
 }
 
