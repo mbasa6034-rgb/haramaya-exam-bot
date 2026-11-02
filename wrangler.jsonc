@@ -3,15 +3,15 @@
   "main": "worker.js",
   "compatibility_date": "2024-09-01",
   "kv_namespaces": [
-    { "binding": "EXAM_KV", "id": "PASTE_KV_ID_HERE" }
+    { "binding": "EXAM_KV", "id": "b675d282fa6e4bb996a7a01a93fd6a62" }
   ],
   "triggers": { "crons": ["0 * * * *"] },
   "vars": {
-    "GROUP_NATURAL": "-1001111111111",
-    "GROUP_SOCIAL": "-1002222222222",
+    "GROUP_NATURAL": "-1004311778569",
+    "GROUP_SOCIAL": "-1003853891296",
     "ADMIN_IDS": "123456789,987654321",
     "PRICE": "300 ETB",
-    "ACCESS_DAYS": "30",
+    "ACCESS_DAYS": "60",
     "PAYMENT_INFO": "Telebirr: 09XXXXXXXX (Name)"
   }
 }
