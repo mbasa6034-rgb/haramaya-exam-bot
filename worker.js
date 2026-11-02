@@ -816,10 +816,16 @@ async function adminInput(env, cfg, msg, st) {
   await saveConfig(env, cfg);
   return home('✅ Saved.');
 }
-
+// Deletes the chat's current screen, so the next reply appears at the bottom
+async function clearScreen(env, chat) {
+  const mid = await env.EXAM_KV.get(`scr:${chat}`);
+  if (mid) await API(env, 'deleteMessage', { chat_id: chat, message_id: Number(mid) });
+  await env.EXAM_KV.delete(`scr:${chat}`);
+}
 // ---------- messages ----------
 async function onMessage(msg, env) {
   if (msg.chat.type !== 'private') return;
+  await clearScreen(env, msg.chat.id);
 
   const cfg = await getConfig(env);
   const uid = String(msg.from.id);
