@@ -1,0 +1,17 @@
+{
+  "name": "haramaya-exam-bot",
+  "main": "worker.js",
+  "compatibility_date": "2024-09-01",
+  "kv_namespaces": [
+    { "binding": "EXAM_KV", "id": "PASTE_KV_ID_HERE" }
+  ],
+  "triggers": { "crons": ["0 * * * *"] },
+  "vars": {
+    "GROUP_NATURAL": "-1001111111111",
+    "GROUP_SOCIAL": "-1002222222222",
+    "ADMIN_IDS": "123456789,987654321",
+    "PRICE": "300 ETB",
+    "ACCESS_DAYS": "30",
+    "PAYMENT_INFO": "Telebirr: 09XXXXXXXX (Name)"
+  }
+}
