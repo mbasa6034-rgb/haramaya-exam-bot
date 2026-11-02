@@ -1,86 +1,100 @@
-// HAREMAYA exam bot: language choice, payments, access control, admin panel.
-// The bot never stores or sends exam files. Admins upload them into the groups.
+// HAREMAYA exam bot v3
+// One screen per chat, one invite link per approved payment, free samples,
+// full admin control. The bot never stores or sends exam files.
 
 const RENEW_WINDOW_DAYS = 3;
+const DAY = 86400000;
 
 const DEFAULT_TRACKS = {
   natural: {
     name: '🧪 Natural Science / ተፈጥሮ ሳይንስ',
     subjects: [
-      { key: 'math', name: 'Mathematics / ሂሳብ' },
-      { key: 'physics', name: 'Physics / ፊዚክስ' },
-      { key: 'chemistry', name: 'Chemistry / ኬሚስትሪ' },
-      { key: 'biology', name: 'Biology / ባዮሎጂ' },
+      { key: 'math', name: 'Mathematics / ሂሳብ', sample: '' },
+      { key: 'physics', name: 'Physics / ፊዚክስ', sample: '' },
+      { key: 'chemistry', name: 'Chemistry / ኬሚስትሪ', sample: '' },
+      { key: 'biology', name: 'Biology / ባዮሎጂ', sample: '' },
     ],
   },
   social: {
     name: '🌍 Social Science / ማህበራዊ ሳይንስ',
     subjects: [
-      { key: 'geography', name: 'Geography / ጂኦግራፊ' },
-      { key: 'history', name: 'History / ታሪክ' },
-      { key: 'civics', name: 'Civics / ሲቪክስ' },
-      { key: 'english', name: 'English / እንግሊዝኛ' },
+      { key: 'geography', name: 'Geography / ጂኦግራፊ', sample: '' },
+      { key: 'history', name: 'History / ታሪክ', sample: '' },
+      { key: 'civics', name: 'Civics / ሲቪክስ', sample: '' },
+      { key: 'english', name: 'English / እንግሊዝኛ', sample: '' },
     ],
   },
 };
 
-// ---------- student messages (English and Amharic) ----------
-const L = {
+// ---------- student text (English and Amharic) ----------
+const T = {
   en: {
     welcome: '👋 <b>Welcome to HAREMAYA Exam Prep</b>',
-    pick_track: 'Choose your track:',
-    access_line: '💳 Access: <b>{price}</b> for {days} days',
-    pay_body: '💳 <b>Payment</b>\nTrack: <b>{track}</b>\nAmount: <b>{price}</b> for {days} days\n\n{info}\n\n📸 After paying, send the screenshot here.',
-    send_screenshot: '📸 Please send a payment screenshot.',
-    received: '✅ Received. An admin will confirm soon.',
+    choose_track: '🎓 <b>Choose your track</b>',
+    choose_lang: '🌐 <b>Choose your language</b>\nቋንቋ ይምረጡ',
+    access: '💳 Access: <b>{price}</b> for <b>{days}</b> days',
+    pay: '💳 <b>Payment</b>\n━━━━━━━━━━━━━━\nTrack: <b>{track}</b>\nAmount: <b>{price}</b> for {days} days\n\n{info}\n━━━━━━━━━━━━━━\n📸 Send your payment screenshot here.',
+    received: '✅ <b>Screenshot received.</b>\nAn admin will confirm your payment shortly.',
     under_review: '⏳ Your payment is under review.',
-    already_active: '✅ You already have access until <b>{date}</b>.\nYou can renew starting {window} days before it ends.',
-    granted: '🎉 <b>Access granted!</b>\nTrack: <b>{track}</b>\nValid until: <b>{date}</b>',
-    join_note: 'Tap the button below to join. Your request is approved automatically.',
-    link_pending: '⏳ Your access is active. Your group link is being prepared. Tap 🔗 My group link again in a moment.',
-    btn_join: '🔗 Join group',
-    no_access: '🔒 No active access. Tap Buy access first.',
+    send_shot: '📸 Please send a payment screenshot.',
+    too_early: '✅ You already have access until <b>{date}</b>.\nYou can renew starting {window} days before it ends.',
+    granted: '🎉 <b>Access granted</b>\nTrack: <b>{track}</b>\nValid until: <b>{date}</b>',
+    join_hint: 'Tap the button below to join. Your request is approved automatically.',
+    link_ready: '🔗 <b>Your group link</b>\nTrack: <b>{track}</b>\nValid until: <b>{date}</b>\n\nTap the button below to join.',
+    link_none: '🔒 You need active access first.',
+    link_wait: '⏳ Your link is being prepared. Please try again in a moment.',
+    no_access: '🔒 No active access to this group. Tap Buy access first.',
     expired: '⌛ Your access has ended. Tap Buy access to renew.',
     rejected: '❌ Payment not confirmed. Please send a clear screenshot.',
-    status_active: '✅ Active until <b>{date}</b> ({track})',
-    status_pending: '⏳ Payment under review ({track})',
-    status_awaiting: '📸 Waiting for your screenshot ({track})',
+    samples_pick: '🎁 <b>Free samples</b>\nChoose a track to preview.',
+    samples_subjects: '🎁 <b>{track}</b>\nChoose a subject.',
+    sample_none: 'No sample has been added for this subject yet.',
     status_none: '❌ No active access.',
-    use_menu: 'Use the menu below.',
-    lang_set: '✅ Language set to English.',
-    pick_lang: '🌐 Choose your language / ቋንቋ ይምረጡ',
+    status_pending: '⏳ Payment under review ({track}).',
+    status_awaiting: '📸 Waiting for your screenshot ({track}).',
+    status_active: '✅ Active until <b>{date}</b> ({track}).',
     btn_buy: '💳 Buy access',
+    btn_samples: '🎁 Free samples',
     btn_link: '🔗 My group link',
     btn_status: '📊 My status',
     btn_lang: '🌐 Language',
+    btn_join: '🔗 Join group',
+    btn_back: '⬅️ Back',
+    btn_menu: '🏠 Main menu',
   },
   am: {
     welcome: '👋 <b>እንኳን ወደ ሃረማያ ፈተና ዝግጅት በደህና መጡ</b>',
-    pick_track: 'ትራክዎን ይምረጡ:',
-    access_line: '💳 መዳረሻ: <b>{price}</b> ለ{days} ቀናት',
-    pay_body: '💳 <b>ክፍያ</b>\nትራክ: <b>{track}</b>\nመጠን: <b>{price}</b> ለ{days} ቀናት\n\n{info}\n\n📸 ከከፈሉ በኋላ ፎቶውን እዚህ ይላኩ።',
-    send_screenshot: '📸 እባክዎ የክፍያ ፎቶ ይላኩ።',
-    received: '✅ ደርሶናል። በቅርቡ ይረጋገጣል።',
+    choose_track: '🎓 <b>ትራክዎን ይምረጡ</b>',
+    choose_lang: '🌐 <b>ቋንቋ ይምረጡ</b>\nChoose your language',
+    access: '💳 መዳረሻ: <b>{price}</b> ለ<b>{days}</b> ቀናት',
+    pay: '💳 <b>ክፍያ</b>\n━━━━━━━━━━━━━━\nትራክ: <b>{track}</b>\nመጠን: <b>{price}</b> ለ{days} ቀናት\n\n{info}\n━━━━━━━━━━━━━━\n📸 ከከፈሉ በኋላ የክፍያ ፎቶውን እዚህ ይላኩ።',
+    received: '✅ <b>ፎቶዎ ደርሶናል።</b>\nአስተዳዳሪ ክፍያውን በቅርቡ ያረጋግጣል።',
     under_review: '⏳ ክፍያዎ እየተረጋገጠ ነው።',
-    already_active: '✅ መዳረሻ አለዎት እስከ <b>{date}</b>።\nከመጠናቀቁ {window} ቀን ቀደም ብለው ማደስ ይችላሉ።',
-    granted: '🎉 <b>መዳረሻ ተሰጥቶዎታል!</b>\nትራክ: <b>{track}</b>\nእስከ: <b>{date}</b>',
-    join_note: 'ለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ። ጥያቄዎ በራሱ ይጸድቃል።',
-    link_pending: '⏳ መዳረሻዎ ገቢር ነው። የቡድን ሊንክዎ እየተዘጋጀ ነው። ትንሽ ቆይተው 🔗 የቡድን ሊንክ ይጫኑ።',
-    btn_join: '🔗 ቡድኑን ይቀላቀሉ',
-    no_access: '🔒 ገቢር መዳረሻ የለዎትም። መጀመሪያ መዳረሻ ይግዙ ይጫኑ።',
-    expired: '⌛ መዳረሻዎ ተጠናቋል። ለማደስ መዳረሻ ይግዙ ይጫኑ።',
-    rejected: '❌ ክፍያ አልተረጋገጠም። ግልጽ ፎቶ ይላኩ።',
-    status_active: '✅ ገቢር እስከ <b>{date}</b> ({track})',
-    status_pending: '⏳ ክፍያ እየተረጋገጠ ነው ({track})',
-    status_awaiting: '📸 ፎቶዎን በመጠበቅ ላይ ({track})',
+    send_shot: '📸 እባክዎ የክፍያ ፎቶ ይላኩ።',
+    too_early: '✅ መዳረሻ አለዎት እስከ <b>{date}</b>።\nከመጠናቀቁ {window} ቀን ቀደም ብለው ማደስ ይችላሉ።',
+    granted: '🎉 <b>መዳረሻ ተሰጥቶዎታል</b>\nትራክ: <b>{track}</b>\nእስከ: <b>{date}</b>',
+    join_hint: 'ለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ። ጥያቄዎ በራሱ ይጸድቃል።',
+    link_ready: '🔗 <b>የቡድን ሊንክ</b>\nትራክ: <b>{track}</b>\nእስከ: <b>{date}</b>\n\nለመቀላቀል ከታች ያለውን ቁልፍ ይጫኑ።',
+    link_none: '🔒 መጀመሪያ ገቢር መዳረሻ ያስፈልጋል።',
+    link_wait: '⏳ ሊንክዎ እየተዘጋጀ ነው። ትንሽ ቆይተው እንደገና ይሞክሩ።',
+    no_access: '🔒 ለዚህ ቡድን ገቢር መዳረሻ የለዎትም። መጀመሪያ መዳረሻ ይግዙ።',
+    expired: '⌛ መዳረሻዎ ተጠናቋል። ለማደስ መዳረሻ ይግዙ።',
+    rejected: '❌ ክፍያ አልተረጋገጠም። እባክዎ ግልጽ ፎቶ ይላኩ።',
+    samples_pick: '🎁 <b>ነጻ ናሙናዎች</b>\nለማየት ትራክ ይምረጡ።',
+    samples_subjects: '🎁 <b>{track}</b>\nትምህርት ይምረጡ።',
+    sample_none: 'ለዚህ ትምህርት ገና ናሙና አልተጨመረም።',
     status_none: '❌ ገቢር መዳረሻ የለም።',
-    use_menu: 'ከታች ያለውን ምናሌ ይጠቀሙ።',
-    lang_set: '✅ ቋንቋ ወደ አማርኛ ተቀይሯል።',
-    pick_lang: '🌐 ቋንቋ ይምረጡ / Choose your language',
+    status_pending: '⏳ ክፍያ እየተረጋገጠ ነው ({track})።',
+    status_awaiting: '📸 ፎቶዎን በመጠበቅ ላይ ({track})።',
+    status_active: '✅ ገቢር እስከ <b>{date}</b> ({track})።',
     btn_buy: '💳 መዳረሻ ግዛ',
+    btn_samples: '🎁 ነጻ ናሙናዎች',
     btn_link: '🔗 የቡድን ሊንክ',
     btn_status: '📊 ሁኔታ',
     btn_lang: '🌐 ቋንቋ',
+    btn_join: '🔗 ቡድኑን ይቀላቀሉ',
+    btn_back: '⬅️ ተመለስ',
+    btn_menu: '🏠 ዋና ምናሌ',
   },
 };
 
@@ -88,11 +102,12 @@ const L = {
 const now = () => Date.now();
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const fmtDate = (ms) => new Date(ms).toISOString().slice(0, 10);
-const daysLeft = (u) => (u.expires - now()) / 86400000;
+const daysLeft = (u) => (u.expires - now()) / DAY;
+const isActive = (u) => u.status === 'active' && u.expires > now();
 
-// t('en', 'granted', { track, date }) fills in {track} and {date}, escaping the values
+// t('en', 'granted', { track, date }) fills {track} and {date}, escaping the values
 function t(lang, key, vars = {}) {
-  let s = (L[lang] && L[lang][key]) || L.en[key] || key;
+  let s = (T[lang] && T[lang][key]) || T.en[key] || key;
   for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(esc(v));
   return s;
 }
@@ -105,7 +120,7 @@ function API(env, method, body) {
   })
     .then((r) => r.json())
     .then((j) => {
-      if (!j.ok) console.log(method, j.description);
+      if (!j.ok && !/not modified/i.test(j.description || '')) console.log(method, j.description);
       return j;
     });
 }
@@ -113,28 +128,46 @@ function API(env, method, body) {
 const send = (env, chat_id, text, extra = {}) =>
   API(env, 'sendMessage', { chat_id, text, parse_mode: 'HTML', ...extra });
 
-const ADMIN_MENU = {
-  inline_keyboard: [
-    [{ text: '📥 Pending payments', callback_data: 'a:pending' }],
-    [{ text: '🔎 Find user', callback_data: 'a:find' }, { text: '📊 Stats', callback_data: 'a:stats' }],
-    [{ text: '➕ Grant access', callback_data: 'a:grant' }, { text: '⛔ Revoke access', callback_data: 'a:revoke' }],
-    [{ text: '📢 Broadcast', callback_data: 'a:broadcast' }],
-    [{ text: '💰 Price', callback_data: 'a:price' }, { text: '⏳ Access days', callback_data: 'a:days' }],
-    [{ text: '📱 Payment info', callback_data: 'a:pay' }, { text: '🏫 Group IDs', callback_data: 'a:groups' }],
-    [{ text: '📚 Subjects', callback_data: 'a:subjects' }, { text: '👮 Admins', callback_data: 'a:admins' }],
-    [{ text: '🔄 Clear invite links', callback_data: 'a:clearlinks' }],
-  ],
-};
-const BACK = { inline_keyboard: [[{ text: '⬅️ Back to panel', callback_data: 'a:home' }]] };
-const CANCEL = { inline_keyboard: [[{ text: '✖ Cancel', callback_data: 'a:cancel' }]] };
+// Sends a brand-new message and remembers it as this chat's current screen
+async function newScreen(env, chat, text, markup) {
+  const r = await API(env, 'sendMessage', { chat_id: chat, text, parse_mode: 'HTML', reply_markup: markup });
+  if (r.ok) await env.EXAM_KV.put(`scr:${chat}`, String(r.result.message_id));
+  return r;
+}
 
-const menuFor = (lang) => ({
+// Edits the chat's current screen in place. Sends a new one only if editing fails.
+async function screen(env, chat, text, markup) {
+  const mid = await env.EXAM_KV.get(`scr:${chat}`);
+  if (mid) {
+    const r = await API(env, 'editMessageText', {
+      chat_id: chat,
+      message_id: Number(mid),
+      text,
+      parse_mode: 'HTML',
+      reply_markup: markup,
+    });
+    if (r.ok || /not modified/i.test(r.description || '')) return r;
+  }
+  return newScreen(env, chat, text, markup);
+}
+
+// ---------- menus ----------
+const menuMarkup = (lang) => ({
   inline_keyboard: [
-    [{ text: t(lang, 'btn_buy'), callback_data: 'buy' }],
-    [{ text: t(lang, 'btn_link'), callback_data: 'link' }],
-    [{ text: t(lang, 'btn_status'), callback_data: 'status' }],
+    [
+      { text: t(lang, 'btn_buy'), callback_data: 'buy' },
+      { text: t(lang, 'btn_samples'), callback_data: 'samp' },
+    ],
+    [
+      { text: t(lang, 'btn_link'), callback_data: 'link' },
+      { text: t(lang, 'btn_status'), callback_data: 'status' },
+    ],
     [{ text: t(lang, 'btn_lang'), callback_data: 'lang' }],
   ],
+});
+
+const backMenu = (lang) => ({
+  inline_keyboard: [[{ text: t(lang, 'btn_menu'), callback_data: 'menu' }]],
 });
 
 const LANG_PICKER = {
@@ -144,9 +177,34 @@ const LANG_PICKER = {
   ]],
 };
 
-const linkButton = (lang, link) => ({
-  inline_keyboard: [[{ text: t(lang, 'btn_join'), url: link }]],
+const trackMarkup = (cfg, lang, prefix, back) => ({
+  inline_keyboard: [
+    ...Object.entries(cfg.tracks).map(([k, v]) => [{ text: v.name, callback_data: `${prefix}:${k}` }]),
+    [{ text: t(lang, 'btn_back'), callback_data: back }],
+  ],
 });
+
+const ADMIN_MENU = {
+  inline_keyboard: [
+    [{ text: '📥 Pending payments', callback_data: 'a:pending' }, { text: '📊 Stats', callback_data: 'a:stats' }],
+    [{ text: '🔎 Find user', callback_data: 'a:find' }, { text: '📢 Broadcast', callback_data: 'a:broadcast' }],
+    [{ text: '➕ Grant access', callback_data: 'a:grant' }, { text: '⛔ Revoke access', callback_data: 'a:revoke' }],
+    [{ text: '💰 Price', callback_data: 'a:price' }, { text: '⏳ Access days', callback_data: 'a:days' }],
+    [{ text: '💳 Payment info', callback_data: 'a:pay' }, { text: '🏫 Group IDs', callback_data: 'a:groups' }],
+    [{ text: '📚 Subjects', callback_data: 'a:subjects' }, { text: '🎁 Samples', callback_data: 'a:samp' }],
+    [{ text: '✍️ Welcome text', callback_data: 'a:welcome' }, { text: '👮 Admins', callback_data: 'a:admins' }],
+  ],
+};
+const ADMIN_BACK = { inline_keyboard: [[{ text: '⬅️ Back to panel', callback_data: 'a:home' }]] };
+const ADMIN_CANCEL = { inline_keyboard: [[{ text: '✖ Cancel', callback_data: 'a:home' }]] };
+
+const adminScreen = (env, chat, notice = '') =>
+  screen(
+    env,
+    chat,
+    `🛠 <b>Admin panel</b>\n━━━━━━━━━━━━━━\n${notice || 'Choose what to manage.'}`,
+    ADMIN_MENU
+  );
 
 // ---------- settings (saved in KV, editable from the admin panel) ----------
 function defaultConfig(env) {
@@ -154,6 +212,7 @@ function defaultConfig(env) {
     price: env.PRICE,
     accessDays: Number(env.ACCESS_DAYS) || 30,
     paymentInfo: env.PAYMENT_INFO,
+    welcome: { en: '', am: '' },
     groups: { natural: String(env.GROUP_NATURAL), social: String(env.GROUP_SOCIAL) },
     admins: [],
     tracks: structuredClone(DEFAULT_TRACKS),
@@ -161,23 +220,40 @@ function defaultConfig(env) {
 }
 
 async function getConfig(env) {
-  return (await env.EXAM_KV.get('config', 'json')) || defaultConfig(env);
+  const saved = await env.EXAM_KV.get('config', 'json');
+  if (!saved) return defaultConfig(env);
+  return { welcome: { en: '', am: '' }, ...saved };
 }
 
 const saveConfig = (env, cfg) => env.EXAM_KV.put('config', JSON.stringify(cfg));
 const superAdmins = (env) => env.ADMIN_IDS.split(',').map((s) => s.trim()).filter(Boolean);
 const allAdmins = (env, cfg) => [...new Set([...superAdmins(env), ...cfg.admins.map(String)])];
+const isAdminId = (env, cfg, id) => allAdmins(env, cfg).includes(String(id));
 const validTrack = (cfg, key) => Object.prototype.hasOwnProperty.call(cfg.tracks, key);
-const trackName = (cfg, key) => (key && validTrack(cfg, key) ? cfg.tracks[key].name : 'No track yet');
+const trackLabel = (cfg, key) => (key && validTrack(cfg, key) ? cfg.tracks[key].name : 'No track yet');
+const findSubject = (cfg, track, key) =>
+  validTrack(cfg, track) ? cfg.tracks[track].subjects.find((s) => s.key === key) : undefined;
 
 async function notifyAdmins(env, cfg, text) {
   for (const a of allAdmins(env, cfg)) await send(env, a, esc(text));
 }
 
 // ---------- users ----------
-const getUser = async (env, id) => (await env.EXAM_KV.get(`user:${id}`, 'json')) || { status: 'none' };
+// flow: none | awaiting_proof | pending   (where the user is in the payment process)
+// status: active | expired | none         (whether access is currently granted)
+async function getUser(env, id) {
+  const u = (await env.EXAM_KV.get(`user:${id}`, 'json')) || {};
+  if (u.flow === undefined) {
+    // Migrate records saved by the earlier versions of the bot
+    u.flow = u.status === 'pending' ? 'pending' : u.status === 'awaiting_proof' ? 'awaiting_proof' : 'none';
+    if (u.status === 'pending' || u.status === 'awaiting_proof' || !u.status) {
+      u.status = u.expires > now() ? 'active' : 'none';
+    }
+  }
+  return { status: 'none', flow: 'none', ...u };
+}
+
 const putUser = (env, id, u) => env.EXAM_KV.put(`user:${id}`, JSON.stringify(u));
-const isActive = (u) => u.status === 'active' && u.expires > now();
 
 async function allUsers(env) {
   const out = [];
@@ -185,87 +261,115 @@ async function allUsers(env) {
   do {
     const page = await env.EXAM_KV.list({ prefix: 'user:', cursor });
     for (const k of page.keys) {
-      const u = await env.EXAM_KV.get(k.name, 'json');
-      if (u) out.push({ id: k.name.slice('user:'.length), ...u });
+      const u = await getUser(env, k.name.slice('user:'.length));
+      out.push({ id: k.name.slice('user:'.length), ...u });
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
   return out;
 }
 
-function statusText(cfg, u) {
-  const lang = u.lang || 'en';
+function statusLine(cfg, u, lang) {
   const track = u.track && validTrack(cfg, u.track) ? cfg.tracks[u.track].name : '-';
   if (isActive(u)) return t(lang, 'status_active', { date: fmtDate(u.expires), track });
-  if (u.status === 'pending') return t(lang, 'status_pending', { track });
-  if (u.status === 'awaiting_proof') return t(lang, 'status_awaiting', { track });
+  if (u.flow === 'pending') return t(lang, 'status_pending', { track });
+  if (u.flow === 'awaiting_proof') return t(lang, 'status_awaiting', { track });
   return t(lang, 'status_none');
 }
 
-// ---------- group invite links (one per track, cached) ----------
-async function groupLink(env, cfg, track) {
+// ---------- invite links ----------
+// A new link is created for each approved payment. The old one is revoked.
+async function newLink(env, cfg, uid, track) {
   const gid = String(cfg.groups[track]);
-  const key = `link:${track}:${gid}`;
-  const cached = await env.EXAM_KV.get(key);
-  if (cached) return cached;
-
   const r = await API(env, 'createChatInviteLink', {
     chat_id: gid,
     creates_join_request: true,
-    name: `HAREMAYA ${track}`.slice(0, 32),
+    name: `m${uid}`.slice(0, 32),
   });
   if (!r.ok) {
-    await notifyAdmins(env, cfg, `⚠️ Could not create the invite link for ${track} (group ${gid}).\nTelegram says: ${r.description}\n\nCheck that the bot is in that group and is an admin with "Invite users via link".`);
+    await notifyAdmins(
+      env,
+      cfg,
+      `⚠️ Could not create an invite link for ${cfg.tracks[track].name} (group ${gid}).\nTelegram says: ${r.description}\n\nCheck that the bot is in that group as an admin with "Invite users via link".`
+    );
     return null;
   }
-  await env.EXAM_KV.put(key, r.result.invite_link);
   return r.result.invite_link;
 }
 
-// ---------- student flow ----------
-async function sendWelcome(env, cfg, chat_id, lang) {
-  const tracks = Object.values(cfg.tracks).map((x) => x.name).join('\n');
-  return send(
+async function dropLink(env, user) {
+  if (user.link && user.link.url) {
+    await API(env, 'revokeChatInviteLink', { chat_id: user.link.gid, invite_link: user.link.url });
+  }
+}
+
+// Returns the user's current link, creating one if they don't have one for their group
+async function ensureLink(env, cfg, uid) {
+  const user = await getUser(env, uid);
+  const gid = String(cfg.groups[user.track]);
+  if (user.link && user.link.url && user.link.gid === gid) return user.link.url;
+  await dropLink(env, user);
+  const url = await newLink(env, cfg, uid, user.track);
+  if (url) await putUser(env, uid, { ...user, link: { url, gid } });
+  return url;
+}
+
+// ---------- student screens ----------
+async function showWelcome(env, cfg, chat, uid) {
+  const user = await getUser(env, uid);
+  const lang = user.lang || 'en';
+  const custom = cfg.welcome && cfg.welcome[lang];
+  const tracks = Object.values(cfg.tracks).map((x) => `• ${x.name}`).join('\n');
+  const body = custom
+    ? esc(custom)
+    : `${t(lang, 'welcome')}\n\n${t(lang, 'choose_track')}\n${tracks}`;
+  return screen(
     env,
-    chat_id,
-    `${t(lang, 'welcome')}\n\n${t(lang, 'pick_track')}\n${tracks}\n\n${t(lang, 'access_line', { price: cfg.price, days: cfg.accessDays })}`,
-    { reply_markup: menuFor(lang) }
+    chat,
+    `${body}\n\n${t(lang, 'access', { price: cfg.price, days: cfg.accessDays })}\n\n${statusLine(cfg, user, lang)}`,
+    menuMarkup(lang)
   );
 }
 
-const trackPicker = (cfg) => ({
-  inline_keyboard: Object.keys(cfg.tracks).map((k) => [{ text: cfg.tracks[k].name, callback_data: `trk:${k}` }]),
-});
-
-function paymentText(cfg, track, lang) {
-  return t(lang, 'pay_body', {
-    track: cfg.tracks[track].name,
-    price: cfg.price,
-    days: cfg.accessDays,
-    info: cfg.paymentInfo,
-  });
-}
-
-async function startBuy(env, cfg, chat_id, uid) {
+async function showBuy(env, cfg, chat, uid) {
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
-  if (user.status === 'pending') return send(env, chat_id, t(lang, 'under_review'));
+  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuMarkup(lang));
   if (isActive(user) && daysLeft(user) > RENEW_WINDOW_DAYS) {
-    return send(env, chat_id, t(lang, 'already_active', { date: fmtDate(user.expires), window: RENEW_WINDOW_DAYS }), { reply_markup: menuFor(lang) });
+    return screen(env, chat, t(lang, 'too_early', { date: fmtDate(user.expires), window: RENEW_WINDOW_DAYS }), menuMarkup(lang));
   }
-  return send(env, chat_id, t(lang, 'pick_track'), { reply_markup: trackPicker(cfg) });
+  return screen(env, chat, t(lang, 'choose_track'), trackMarkup(cfg, lang, 'trk', 'menu'));
+}
+
+async function chooseTrack(env, cfg, chat, uid, picked) {
+  if (!validTrack(cfg, picked)) return;
+  const user = await getUser(env, uid);
+  const lang = user.lang || 'en';
+  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuMarkup(lang));
+  if (isActive(user) && daysLeft(user) > RENEW_WINDOW_DAYS) {
+    return screen(env, chat, t(lang, 'too_early', { date: fmtDate(user.expires), window: RENEW_WINDOW_DAYS }), menuMarkup(lang));
+  }
+  // Renewals stay on the track the student already has
+  const track = isActive(user) && validTrack(cfg, user.track) ? user.track : picked;
+  await putUser(env, uid, { ...user, track, flow: 'awaiting_proof' });
+  return screen(
+    env,
+    chat,
+    t(lang, 'pay', { track: cfg.tracks[track].name, price: cfg.price, days: cfg.accessDays, info: cfg.paymentInfo }),
+    backMenu(lang)
+  );
 }
 
 async function submitProof(env, cfg, msg, user) {
   const uid = String(msg.from.id);
-  await putUser(env, uid, { ...user, status: 'pending' });
+  const lang = user.lang || 'en';
+  await putUser(env, uid, { ...user, flow: 'pending' });
   const name = esc(msg.from.first_name || 'User');
-  const track = esc(trackName(cfg, user.track));
   const kind = isActive(user) ? ' (RENEWAL)' : '';
 
-  for (const admin of allAdmins(env, cfg)) {
-    await API(env, 'forwardMessage', { chat_id: admin, from_chat_id: msg.chat.id, message_id: msg.message_id });
-    await send(env, admin, `🧾 Payment from <b>${name}</b> (<code>${uid}</code>)${kind}\nTrack: ${track}\nPrice: ${esc(cfg.price)}`, {
+  for (const a of allAdmins(env, cfg)) {
+    await API(env, 'forwardMessage', { chat_id: a, from_chat_id: msg.chat.id, message_id: msg.message_id });
+    await send(env, a, `🧾 Payment from <b>${name}</b> (<code>${uid}</code>)${kind}\nTrack: ${esc(trackLabel(cfg, user.track))}\nPrice: ${esc(cfg.price)}`, {
       reply_markup: {
         inline_keyboard: [[
           { text: `✅ Approve ${cfg.accessDays}d`, callback_data: `ok:${uid}` },
@@ -274,53 +378,90 @@ async function submitProof(env, cfg, msg, user) {
       },
     });
   }
-  return send(env, msg.chat.id, t(user.lang || 'en', 'received'));
+  return screen(env, msg.chat.id, t(lang, 'received'), menuMarkup(lang));
 }
 
-async function sendMyLink(env, cfg, chat_id, uid) {
+async function showLink(env, cfg, chat, uid) {
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
   if (!isActive(user) || !validTrack(cfg, user.track)) {
-    return send(env, chat_id, t(lang, 'no_access'), { reply_markup: menuFor(lang) });
+    return screen(env, chat, t(lang, 'link_none'), menuMarkup(lang));
   }
-  const link = await groupLink(env, cfg, user.track);
-  if (!link) return send(env, chat_id, t(lang, 'link_pending'));
-  return send(env, chat_id, t(lang, 'join_note'), { reply_markup: linkButton(lang, link) });
+  const url = await ensureLink(env, cfg, uid);
+  if (!url) return screen(env, chat, t(lang, 'link_wait'), backMenu(lang));
+  return screen(
+    env,
+    chat,
+    t(lang, 'link_ready', { track: cfg.tracks[user.track].name, date: fmtDate(user.expires) }),
+    { inline_keyboard: [[{ text: t(lang, 'btn_join'), url }], [{ text: t(lang, 'btn_menu'), callback_data: 'menu' }]] }
+  );
+}
+
+async function showSamplePicker(env, cfg, chat, uid) {
+  const lang = (await getUser(env, uid)).lang || 'en';
+  return screen(env, chat, t(lang, 'samples_pick'), trackMarkup(cfg, lang, 'sp', 'menu'));
+}
+
+async function showSubjectPicker(env, cfg, chat, uid, track) {
+  if (!validTrack(cfg, track)) return;
+  const lang = (await getUser(env, uid)).lang || 'en';
+  const rows = cfg.tracks[track].subjects.map((s) => [{ text: s.name, callback_data: `ss:${track}:${s.key}` }]);
+  rows.push([{ text: t(lang, 'btn_back'), callback_data: 'samp' }]);
+  return screen(env, chat, t(lang, 'samples_subjects', { track: cfg.tracks[track].name }), { inline_keyboard: rows });
+}
+
+async function showSample(env, cfg, chat, uid, track, key) {
+  const lang = (await getUser(env, uid)).lang || 'en';
+  const s = findSubject(cfg, track, key);
+  if (!s) return;
+  const body = s.sample
+    ? `🎁 <b>${esc(s.name)}</b>\n━━━━━━━━━━━━━━\n${esc(s.sample)}`
+    : `🎁 <b>${esc(s.name)}</b>\n━━━━━━━━━━━━━━\n${t(lang, 'sample_none')}`;
+  return screen(env, chat, body, {
+    inline_keyboard: [
+      [{ text: t(lang, 'btn_back'), callback_data: `sp:${track}` }],
+      [{ text: t(lang, 'btn_menu'), callback_data: 'menu' }],
+    ],
+  });
 }
 
 // ---------- access control ----------
-// Returns 'ok' or 'no_track'. Renewals add days to the existing end date.
+// Returns 'ok' or 'no_track'. Renewals add days to the current end date.
 async function grantAccess(env, cfg, uid, days) {
   const user = await getUser(env, uid);
   if (!user.track || !validTrack(cfg, user.track)) return 'no_track';
 
   const lang = user.lang || 'en';
-  const base = Math.max(now(), user.expires || 0);
-  const expires = base + days * 86400000;
-  await putUser(env, uid, { ...user, status: 'active', expires });
+  const expires = Math.max(now(), user.expires || 0) + days * DAY;
+  await dropLink(env, user);
+  const url = await newLink(env, cfg, uid, user.track);
+  const link = url ? { url, gid: String(cfg.groups[user.track]) } : null;
+  await putUser(env, uid, { ...user, status: 'active', flow: 'none', expires, link });
 
-  const link = await groupLink(env, cfg, user.track);
-  const text =
-    t(lang, 'granted', { track: cfg.tracks[user.track].name, date: fmtDate(expires) }) +
-    '\n\n' +
-    t(lang, link ? 'join_note' : 'link_pending');
-  const r = await send(env, uid, text, link ? { reply_markup: linkButton(lang, link) } : {});
+  const body = t(lang, 'granted', { track: cfg.tracks[user.track].name, date: fmtDate(expires) });
+  const r = url
+    ? await newScreen(env, uid, `${body}\n\n${t(lang, 'join_hint')}`, {
+        inline_keyboard: [[{ text: t(lang, 'btn_join'), url }], [{ text: t(lang, 'btn_menu'), callback_data: 'menu' }]],
+      })
+    : await newScreen(env, uid, `${body}\n\n${t(lang, 'link_wait')}`, menuMarkup(lang));
 
   if (!r.ok) {
-    await notifyAdmins(env, cfg, `⚠️ Approved ${uid}, but the bot could not message them. They must press /start in the bot first.`);
+    await notifyAdmins(env, cfg, `⚠️ Access granted to ${uid}, but the bot could not message them. They must press /start in the bot first.`);
   }
   return 'ok';
 }
 
 async function revokeAccess(env, cfg, uid) {
   const user = await getUser(env, uid);
-  await putUser(env, uid, { ...user, status: 'expired', expires: 0 });
+  await dropLink(env, user);
+  await putUser(env, uid, { ...user, status: 'expired', expires: 0, link: null });
   if (user.track && validTrack(cfg, user.track)) {
     const gid = String(cfg.groups[user.track]);
     await API(env, 'banChatMember', { chat_id: gid, user_id: Number(uid) });
     await API(env, 'unbanChatMember', { chat_id: gid, user_id: Number(uid), only_if_banned: true });
   }
-  await send(env, uid, t(user.lang || 'en', 'expired'));
+  const lang = user.lang || 'en';
+  await newScreen(env, uid, t(lang, 'expired'), menuMarkup(lang));
 }
 
 async function expireMembers(env) {
@@ -330,13 +471,41 @@ async function expireMembers(env) {
   }
 }
 
-const grantMsg = (r, id) => (r === 'ok' ? `✅ Granted ${esc(id)}` : `⚠️ ${esc(id)} has no track yet.`);
+const grantMsg = (r, id) => (r === 'ok' ? `✅ Access granted to ${esc(id)}` : `⚠️ ${esc(id)} has no track yet.`);
 
-// ---------- admin panel: text input ----------
-async function showUser(env, cfg, chat, id) {
+// ---------- payment decisions (buttons on the admin card) ----------
+async function resolveCard(env, q, text) {
+  if (!q.message) return null;
+  return API(env, 'editMessageText', {
+    chat_id: q.message.chat.id,
+    message_id: q.message.message_id,
+    text,
+    parse_mode: 'HTML',
+  });
+}
+
+async function handlePayment(env, cfg, q, action, uid) {
+  const user = await getUser(env, uid);
+  const by = esc(q.from.first_name || 'admin');
+  if (user.flow !== 'pending') return resolveCard(env, q, `ℹ️ Already handled. User: ${esc(uid)}`);
+
+  if (action === 'ok') {
+    const r = await grantAccess(env, cfg, uid, cfg.accessDays);
+    if (r !== 'ok') return resolveCard(env, q, `⚠️ ${esc(uid)} has no track yet.`);
+    return resolveCard(env, q, `✅ <b>Approved</b> by ${by}\nUser: ${esc(uid)}`);
+  }
+
+  await putUser(env, uid, { ...user, flow: 'none' });
+  await screen(env, uid, t(user.lang || 'en', 'rejected'), menuMarkup(user.lang || 'en'));
+  return resolveCard(env, q, `❌ <b>Rejected</b> by ${by}\nUser: ${esc(uid)}`);
+}
+
+// ---------- admin screens ----------
+async function userCard(env, cfg, id) {
   const u = await getUser(env, id);
-  return send(env, chat, `👤 <code>${esc(id)}</code>\n${esc(u.name || '')}\n${statusText(cfg, u)}`, {
-    reply_markup: {
+  return {
+    text: `👤 <b>User</b> <code>${esc(id)}</code>\n━━━━━━━━━━━━━━\nName: ${esc(u.name || '-')}\nTrack: ${esc(trackLabel(cfg, u.track))}\n${statusLine(cfg, u, 'en')}`,
+    markup: {
       inline_keyboard: [
         [
           { text: `✅ Grant ${cfg.accessDays}d`, callback_data: `a:gq:${id}` },
@@ -345,124 +514,39 @@ async function showUser(env, cfg, chat, id) {
         [{ text: '⬅️ Back to panel', callback_data: 'a:home' }],
       ],
     },
-  });
+  };
 }
 
-async function broadcast(env, text) {
-  let sent = 0;
-  for (const u of await allUsers(env)) {
-    const r = await send(env, Number(u.id), esc(text));
-    if (r.ok) sent++;
-  }
-  return sent;
-}
-
-async function adminInput(env, cfg, msg, state) {
-  const chat = msg.chat.id;
-  const text = (msg.text || '').trim();
-  await env.EXAM_KV.delete(`adm:${msg.from.id}`);
-
-  const home = (x) => send(env, chat, x, { reply_markup: ADMIN_MENU });
-  const bad = (x) => send(env, chat, x, { reply_markup: BACK });
-
-  switch (state.step) {
-    case 'find':
-      return showUser(env, cfg, chat, text.split(/\s+/)[0]);
-
-    case 'grant': {
-      const [id, days] = text.split(/\s+/);
-      if (!id) return bad('Send an ID.');
-      const r = await grantAccess(env, cfg, id, Number(days) > 0 ? Number(days) : cfg.accessDays);
-      return home(grantMsg(r, id));
-    }
-
-    case 'revoke':
-      await revokeAccess(env, cfg, text.split(/\s+/)[0]);
-      return home('🚫 Revoked.');
-
-    case 'broadcast': {
-      const n = await broadcast(env, text);
-      return home(`📢 Sent to ${n} users.`);
-    }
-
-    case 'price':
-      cfg.price = text;
-      break;
-
-    case 'days': {
-      const n = Number(text);
-      if (!(n > 0)) return bad('Send a number greater than 0.');
-      cfg.accessDays = n;
-      break;
-    }
-
-    case 'pay':
-      cfg.paymentInfo = text;
-      break;
-
-    case 'group_natural':
-    case 'group_social':
-      cfg.groups[state.step.slice('group_'.length)] = text;
-      break;
-
-    case 'subject_add': {
-      const m = text.match(/^([a-z0-9_-]+)\s*\|\s*(.+)$/i);
-      if (!m) return bad('Format: key | Display name');
-      if (!validTrack(cfg, state.track)) return bad('Unknown track.');
-      const key = m[1].toLowerCase();
-      const subjects = cfg.tracks[state.track].subjects;
-      if (subjects.some((s) => s.key === key)) return bad('That key already exists.');
-      subjects.push({ key, name: m[2].trim() });
-      break;
-    }
-
-    case 'admin_add': {
-      const id = text.split(/\s+/)[0];
-      if (!/^\d+$/.test(id)) return bad('Send a numeric Telegram ID.');
-      if (!cfg.admins.includes(id)) cfg.admins.push(id);
-      break;
-    }
-
-    default:
-      return home('🛠 Admin panel');
-  }
-
-  await saveConfig(env, cfg);
-  return home('✅ Saved.');
-}
-
-// ---------- admin panel: buttons ----------
-async function showSubjects(env, chat, cfg, track) {
+async function subjectScreen(env, chat, cfg, track) {
   const rows = cfg.tracks[track].subjects.map((s) => [
     { text: `🗑 ${s.name}`, callback_data: `a:subdel:${track}:${s.key}` },
   ]);
-  rows.push([{ text: '➕ Add subject', callback_data: `a:subadd:${track}` }]);
+  rows.push([
+    { text: '➕ Add subject', callback_data: `a:subadd:${track}` },
+    { text: '✏️ Rename track', callback_data: `a:tname:${track}` },
+  ]);
   rows.push([{ text: '⬅️ Back to panel', callback_data: 'a:home' }]);
-  return send(env, chat, `📚 <b>${esc(cfg.tracks[track].name)}</b>\nTap a subject to remove it.`, {
-    reply_markup: { inline_keyboard: rows },
-  });
+  return screen(env, chat, `📚 <b>${esc(cfg.tracks[track].name)}</b>\nTap a subject to remove it.`, { inline_keyboard: rows });
 }
 
-async function adminCallback(q, env, cfg) {
+async function adminCallback(env, cfg, q, [op, x, y]) {
   const chat = q.from.id;
-  const [, op, a1, a2] = q.data.split(':');
 
   const ask = async (step, text, extra = {}) => {
     await env.EXAM_KV.put(`adm:${chat}`, JSON.stringify({ step, ...extra }), { expirationTtl: 1800 });
-    return send(env, chat, text, { reply_markup: CANCEL });
+    return screen(env, chat, text, ADMIN_CANCEL);
   };
 
   switch (op) {
     case 'home':
-    case 'cancel':
       await env.EXAM_KV.delete(`adm:${chat}`);
-      return send(env, chat, '🛠 Admin panel', { reply_markup: ADMIN_MENU });
+      return adminScreen(env, chat);
 
     case 'pending': {
-      const list = (await allUsers(env)).filter((u) => u.status === 'pending');
-      if (!list.length) return send(env, chat, '✅ No pending payments.', { reply_markup: BACK });
+      const list = (await allUsers(env)).filter((u) => u.flow === 'pending');
+      if (!list.length) return screen(env, chat, '✅ No pending payments.', ADMIN_BACK);
       for (const u of list.slice(0, 20)) {
-        await send(env, chat, `🧾 <b>${esc(u.name || 'User')}</b> (<code>${u.id}</code>)\nTrack: ${esc(trackName(cfg, u.track))}`, {
+        await send(env, chat, `🧾 <b>${esc(u.name || 'User')}</b> (<code>${esc(u.id)}</code>)\nTrack: ${esc(trackLabel(cfg, u.track))}`, {
           reply_markup: {
             inline_keyboard: [[
               { text: `✅ Approve ${cfg.accessDays}d`, callback_data: `ok:${u.id}` },
@@ -471,123 +555,266 @@ async function adminCallback(q, env, cfg) {
           },
         });
       }
-      return;
+      return screen(env, chat, `🧾 ${list.length} pending payment(s) are shown above.`, ADMIN_BACK);
+    }
+
+    case 'stats': {
+      const users = await allUsers(env);
+      const c = (f) => users.filter(f).length;
+      return screen(
+        env,
+        chat,
+        `📊 <b>Statistics</b>\n━━━━━━━━━━━━━━\n👥 Users: ${users.length}\n✅ Active: ${c((u) => isActive(u))}\n⏳ Pending: ${c((u) => u.flow === 'pending')}\n📸 Awaiting screenshot: ${c((u) => u.flow === 'awaiting_proof')}`,
+        ADMIN_BACK
+      );
     }
 
     case 'find':
       return ask('find', '🔎 Send the Telegram ID of the user.');
-
     case 'grant':
       return ask('grant', '➕ Send the ID and optional days.\nExample: <code>123456789 30</code>');
-
     case 'revoke':
       return ask('revoke', '⛔ Send the Telegram ID to revoke.');
-
     case 'broadcast':
       return ask('broadcast', '📢 Send the message to all users.');
 
     case 'gq': {
-      const r = await grantAccess(env, cfg, a1, cfg.accessDays);
-      return send(env, chat, grantMsg(r, a1), { reply_markup: BACK });
+      const r = await grantAccess(env, cfg, x, cfg.accessDays);
+      return screen(env, chat, grantMsg(r, x), ADMIN_BACK);
     }
-
     case 'rq':
-      await revokeAccess(env, cfg, a1);
-      return send(env, chat, '🚫 Revoked.', { reply_markup: BACK });
+      await revokeAccess(env, cfg, x);
+      return screen(env, chat, '🚫 Revoked.', ADMIN_BACK);
 
     case 'price':
       return ask('price', `💰 Current price: <b>${esc(cfg.price)}</b>\nSend the new price.`);
-
     case 'days':
       return ask('days', `⏳ Current: <b>${cfg.accessDays} days</b>\nSend the new number of days.`);
-
     case 'pay':
-      return ask('pay', `📱 Current payment info:\n${esc(cfg.paymentInfo)}\n\nSend the new text.`);
+      return ask('pay', `💳 Current payment info:\n${esc(cfg.paymentInfo)}\n\nSend the new text.`);
 
     case 'groups':
-      return send(env, chat,
-        `🏫 <b>Groups</b>\n🧪 Natural: <code>${esc(cfg.groups.natural)}</code>\n🌍 Social: <code>${esc(cfg.groups.social)}</code>`,
+      return screen(
+        env,
+        chat,
+        `🏫 <b>Group IDs</b>\n━━━━━━━━━━━━━━\n🧪 Natural: <code>${esc(cfg.groups.natural)}</code>\n🌍 Social: <code>${esc(cfg.groups.social)}</code>`,
         {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: 'Set Natural', callback_data: 'a:setg:natural' },
-                { text: 'Set Social', callback_data: 'a:setg:social' },
-              ],
-              [{ text: '⬅️ Back to panel', callback_data: 'a:home' }],
-            ],
-          },
-        });
-
-    case 'setg':
-      if (!validTrack(cfg, a1)) return;
-      return ask(`group_${a1}`, `Send the new group ID for ${esc(a1)} (starts with -100).`);
-
-    case 'subjects':
-      return send(env, chat, '📚 Choose a track', {
-        reply_markup: {
           inline_keyboard: [
-            ...Object.keys(cfg.tracks).map((k) => [{ text: cfg.tracks[k].name, callback_data: `a:subj:${k}` }]),
+            [
+              { text: '✏️ Natural', callback_data: 'a:setg:natural' },
+              { text: '✏️ Social', callback_data: 'a:setg:social' },
+            ],
             [{ text: '⬅️ Back to panel', callback_data: 'a:home' }],
           ],
-        },
+        }
+      );
+    case 'setg':
+      if (!validTrack(cfg, x)) return;
+      return ask(`group_${x}`, `Send the new group ID for ${esc(cfg.tracks[x].name)} (starts with -100).`);
+
+    case 'subjects':
+      return screen(env, chat, '📚 <b>Subjects</b>\nChoose a track.', {
+        inline_keyboard: [
+          ...Object.entries(cfg.tracks).map(([k, v]) => [{ text: v.name, callback_data: `a:subj:${k}` }]),
+          [{ text: '⬅️ Back to panel', callback_data: 'a:home' }],
+        ],
       });
-
     case 'subj':
-      if (!validTrack(cfg, a1)) return;
-      return showSubjects(env, chat, cfg, a1);
-
+      if (!validTrack(cfg, x)) return;
+      return subjectScreen(env, chat, cfg, x);
     case 'subadd':
-      if (!validTrack(cfg, a1)) return;
-      return ask('subject_add',
-        'Send: <code>key | Display name</code>\nExample: <code>biology | Biology / ባዮሎጂ</code>\n' +
-        'The key must match the folder name you use for that subject.', { track: a1 });
-
-    case 'subdel': {
-      if (!validTrack(cfg, a1)) return;
-      cfg.tracks[a1].subjects = cfg.tracks[a1].subjects.filter((s) => s.key !== a2);
+      if (!validTrack(cfg, x)) return;
+      return ask(
+        'subject_add',
+        'Send: <code>key | Display name</code>\nExample: <code>biology | Biology / ባዮሎጂ</code>\nThe key must match the folder name you use in the group.',
+        { track: x }
+      );
+    case 'tname':
+      if (!validTrack(cfg, x)) return;
+      return ask('tname', `Send the new name for this track.\nCurrent: ${esc(cfg.tracks[x].name)}`, { track: x });
+    case 'subdel':
+      if (!validTrack(cfg, x)) return;
+      cfg.tracks[x].subjects = cfg.tracks[x].subjects.filter((s) => s.key !== y);
       await saveConfig(env, cfg);
-      await send(env, chat, `🗑 Removed <code>${esc(a2)}</code>`);
-      return showSubjects(env, chat, cfg, a1);
+      return subjectScreen(env, chat, cfg, x);
+
+    case 'samp':
+      return screen(env, chat, '🎁 <b>Samples</b>\nChoose a track.', {
+        inline_keyboard: [
+          ...Object.entries(cfg.tracks).map(([k, v]) => [{ text: v.name, callback_data: `a:samt:${k}` }]),
+          [{ text: '⬅️ Back to panel', callback_data: 'a:home' }],
+        ],
+      });
+    case 'samt':
+      if (!validTrack(cfg, x)) return;
+      return screen(env, chat, `🎁 <b>${esc(cfg.tracks[x].name)}</b>\n✅ sample added · ➖ no sample yet`, {
+        inline_keyboard: [
+          ...cfg.tracks[x].subjects.map((s) => [{ text: `${s.sample ? '✅' : '➖'} ${s.name}`, callback_data: `a:sams:${x}:${s.key}` }]),
+          [{ text: '⬅️ Back', callback_data: 'a:samp' }],
+        ],
+      });
+    case 'sams': {
+      const s = findSubject(cfg, x, y);
+      if (!s) return;
+      return screen(
+        env,
+        chat,
+        `🎁 <b>${esc(s.name)}</b>\n━━━━━━━━━━━━━━\n${s.sample ? esc(s.sample) : '<i>No sample yet.</i>'}`,
+        {
+          inline_keyboard: [
+            [
+              { text: '✏️ Set sample', callback_data: `a:samset:${x}:${y}` },
+              { text: '🗑 Clear', callback_data: `a:samclr:${x}:${y}` },
+            ],
+            [{ text: '⬅️ Back', callback_data: `a:samt:${x}` }],
+          ],
+        }
+      );
     }
+    case 'samset':
+      if (!findSubject(cfg, x, y)) return;
+      return ask('sample_set', 'Send the sample for this subject.\nYou can send text or a link to a group topic (t.me/...).', { track: x, key: y });
+    case 'samclr': {
+      const s = findSubject(cfg, x, y);
+      if (s) {
+        s.sample = '';
+        await saveConfig(env, cfg);
+      }
+      return adminCallback(env, cfg, q, ['sams', x, y]);
+    }
+
+    case 'welcome':
+      return screen(
+        env,
+        chat,
+        `✍️ <b>Welcome text</b>\n━━━━━━━━━━━━━━\n🇬🇧 English:\n${esc(cfg.welcome?.en || '(default)')}\n\n🇪🇹 Amharic:\n${esc(cfg.welcome?.am || '(default)')}`,
+        {
+          inline_keyboard: [
+            [
+              { text: '✏️ English', callback_data: 'a:welc:en' },
+              { text: '✏️ Amharic', callback_data: 'a:welc:am' },
+            ],
+            [{ text: '♻️ Reset to default', callback_data: 'a:welc:reset' }],
+            [{ text: '⬅️ Back to panel', callback_data: 'a:home' }],
+          ],
+        }
+      );
+    case 'welc':
+      if (x === 'reset') {
+        cfg.welcome = { en: '', am: '' };
+        await saveConfig(env, cfg);
+        return adminScreen(env, chat, '♻️ Welcome text reset to default.');
+      }
+      if (x !== 'en' && x !== 'am') return;
+      return ask(`welcome_${x}`, `Send the new welcome text (${x === 'en' ? 'English' : 'Amharic'}).\nLine breaks are kept.`);
 
     case 'admins': {
       const rows = superAdmins(env).map((id) => [{ text: `👑 ${id} (owner)`, callback_data: 'a:home' }]);
       for (const id of cfg.admins) rows.push([{ text: `🗑 ${id}`, callback_data: `a:admdel:${id}` }]);
       rows.push([{ text: '➕ Add admin', callback_data: 'a:admadd' }]);
       rows.push([{ text: '⬅️ Back to panel', callback_data: 'a:home' }]);
-      return send(env, chat, '👮 <b>Admins</b>\nTap an ID to remove it. Owners cannot be removed.', {
-        reply_markup: { inline_keyboard: rows },
-      });
+      return screen(env, chat, '👮 <b>Admins</b>\nOwners cannot be removed here.', { inline_keyboard: rows });
     }
-
     case 'admadd':
       return ask('admin_add', 'Send the Telegram ID of the new admin.');
-
     case 'admdel':
-      if (superAdmins(env).includes(a1)) return send(env, chat, '⚠️ Owners cannot be removed here.', { reply_markup: BACK });
-      cfg.admins = cfg.admins.filter((id) => id !== a1);
+      if (superAdmins(env).includes(x)) return screen(env, chat, '⚠️ Owners cannot be removed here.', ADMIN_BACK);
+      cfg.admins = cfg.admins.filter((id) => id !== x);
       await saveConfig(env, cfg);
-      return send(env, chat, `🗑 Removed admin ${esc(a1)}`, { reply_markup: BACK });
+      return adminScreen(env, chat, `🗑 Removed admin ${esc(x)}`);
 
-    case 'stats': {
-      const users = await allUsers(env);
-      const count = (fn) => users.filter(fn).length;
-      return send(env, chat,
-        `📊 <b>Stats</b>\n👥 Users: ${users.length}\n✅ Active: ${count(isActive)}\n` +
-        `⏳ Pending: ${count((u) => u.status === 'pending')}\n📸 Awaiting screenshot: ${count((u) => u.status === 'awaiting_proof')}`,
-        { reply_markup: BACK });
+    default:
+      return adminScreen(env, chat);
+  }
+}
+
+// ---------- admin typed input ----------
+async function adminInput(env, cfg, msg, st) {
+  const chat = msg.chat.id;
+  const text = (msg.text || '').trim();
+  await env.EXAM_KV.delete(`adm:${msg.from.id}`);
+
+  const back = (x) => screen(env, chat, x, ADMIN_BACK);
+  const home = (x = '') => adminScreen(env, chat, x);
+
+  switch (st.step) {
+    case 'find': {
+      const c = await userCard(env, cfg, text.split(/\s+/)[0]);
+      return screen(env, chat, c.text, c.markup);
+    }
+    case 'grant': {
+      const [id, days] = text.split(/\s+/);
+      if (!id) return back('Send an ID.');
+      const r = await grantAccess(env, cfg, id, Number(days) > 0 ? Number(days) : cfg.accessDays);
+      return home(grantMsg(r, id));
+    }
+    case 'revoke':
+      await revokeAccess(env, cfg, text.split(/\s+/)[0]);
+      return home('🚫 Revoked.');
+    case 'broadcast': {
+      let n = 0;
+      for (const u of await allUsers(env)) {
+        const r = await send(env, Number(u.id), esc(text));
+        if (r.ok) n++;
+      }
+      return home(`📢 Sent to ${n} users.`);
     }
 
-    case 'clearlinks': {
-      const list = await env.EXAM_KV.list({ prefix: 'link:' });
-      for (const k of list.keys) await env.EXAM_KV.delete(k.name);
-      return send(env, chat, '🔄 Invite links cleared. New links are created when needed.', { reply_markup: BACK });
+    case 'price':
+      cfg.price = text;
+      break;
+    case 'days': {
+      const n = Number(text);
+      if (!(n > 0)) return back('Send a number greater than 0.');
+      cfg.accessDays = n;
+      break;
+    }
+    case 'pay':
+      cfg.paymentInfo = text;
+      break;
+    case 'group_natural':
+    case 'group_social':
+      cfg.groups[st.step.slice(6)] = text;
+      break;
+
+    case 'subject_add': {
+      const m = text.match(/^([a-z0-9_-]+)\s*\|\s*(.+)$/i);
+      if (!m) return back('Format: key | Display name');
+      if (!validTrack(cfg, st.track)) return back('Unknown track.');
+      const key = m[1].toLowerCase();
+      if (cfg.tracks[st.track].subjects.some((s) => s.key === key)) return back('That key already exists.');
+      cfg.tracks[st.track].subjects.push({ key, name: m[2].trim(), sample: '' });
+      break;
+    }
+    case 'tname':
+      if (!validTrack(cfg, st.track)) return back('Unknown track.');
+      cfg.tracks[st.track].name = text;
+      break;
+    case 'sample_set': {
+      const s = findSubject(cfg, st.track, st.key);
+      if (!s) return back('Subject not found.');
+      s.sample = text.slice(0, 2000);
+      break;
+    }
+    case 'welcome_en':
+    case 'welcome_am':
+      cfg.welcome = { en: '', am: '', ...(cfg.welcome || {}) };
+      cfg.welcome[st.step.slice(8)] = text;
+      break;
+
+    case 'admin_add': {
+      const id = text.split(/\s+/)[0];
+      if (!/^\d+$/.test(id)) return back('Send a numeric Telegram ID.');
+      if (!cfg.admins.includes(id)) cfg.admins.push(id);
+      break;
     }
 
     default:
-      return send(env, chat, '🛠 Admin panel', { reply_markup: ADMIN_MENU });
+      return home();
   }
+
+  await saveConfig(env, cfg);
+  return home('✅ Saved.');
 }
 
 // ---------- messages ----------
@@ -596,13 +823,13 @@ async function onMessage(msg, env) {
 
   const cfg = await getConfig(env);
   const uid = String(msg.from.id);
-  const chat_id = msg.chat.id;
+  const chat = msg.chat.id;
   const text = (msg.text || '').trim();
-  const parts = text.split(/\s+/);
-  const cmd = parts[0].toLowerCase().split('@')[0];
+  const cmd = text.split(/\s+/)[0].toLowerCase().split('@')[0];
+  const args = text.split(/\s+/).slice(1);
   const user = await getUser(env, uid);
   const lang = user.lang || 'en';
-  const admin = allAdmins(env, cfg).includes(uid);
+  const admin = isAdminId(env, cfg, uid);
 
   if (cmd.startsWith('/')) {
     await env.EXAM_KV.delete(`adm:${uid}`);
@@ -612,120 +839,92 @@ async function onMessage(msg, env) {
   }
 
   if (cmd === '/start') {
-    await putUser(env, uid, { ...user, name: msg.from.first_name || '' });
-    if (!user.lang) return send(env, chat_id, t('en', 'pick_lang'), { reply_markup: LANG_PICKER });
-    return sendWelcome(env, cfg, chat_id, lang);
+    await putUser(env, uid, { ...user, name: msg.from.first_name || user.name || '' });
+    if (!user.lang) return screen(env, chat, T.en.choose_lang, LANG_PICKER);
+    return showWelcome(env, cfg, chat, uid);
   }
-  if (cmd === '/lang') return send(env, chat_id, t(lang, 'pick_lang'), { reply_markup: LANG_PICKER });
-  if (cmd === '/buy') return startBuy(env, cfg, chat_id, uid);
-  if (cmd === '/status') return send(env, chat_id, statusText(cfg, user), { reply_markup: menuFor(lang) });
-  if (cmd === '/link') return sendMyLink(env, cfg, chat_id, uid);
 
-  if (admin && (cmd === '/admin' || cmd === '/cancel')) {
-    return send(env, chat_id, '🛠 Admin panel', { reply_markup: ADMIN_MENU });
+  if (admin && cmd === '/admin') return adminScreen(env, chat);
+  if (admin && cmd === '/grant' && args[0]) {
+    const r = await grantAccess(env, cfg, args[0], Number(args[1]) > 0 ? Number(args[1]) : cfg.accessDays);
+    return adminScreen(env, chat, grantMsg(r, args[0]));
   }
-  if (admin && cmd === '/grant' && parts[1]) {
-    const r = await grantAccess(env, cfg, parts[1], Number(parts[2]) > 0 ? Number(parts[2]) : cfg.accessDays);
-    return send(env, chat_id, grantMsg(r, parts[1]));
+  if (admin && cmd === '/revoke' && args[0]) {
+    await revokeAccess(env, cfg, args[0]);
+    return adminScreen(env, chat, `🚫 Revoked ${esc(args[0])}`);
   }
-  if (admin && cmd === '/revoke' && parts[1]) {
-    await revokeAccess(env, cfg, parts[1]);
-    return send(env, chat_id, `🚫 Revoked ${esc(parts[1])}`);
-  }
+
+  if (!user.lang && !admin) return screen(env, chat, T.en.choose_lang, LANG_PICKER);
+
+  if (cmd === '/menu') return showWelcome(env, cfg, chat, uid);
+  if (cmd === '/buy') return showBuy(env, cfg, chat, uid);
+  if (cmd === '/samples') return showSamplePicker(env, cfg, chat, uid);
+  if (cmd === '/status') return screen(env, chat, statusLine(cfg, user, lang), menuMarkup(lang));
+  if (cmd === '/link') return showLink(env, cfg, chat, uid);
+  if (cmd === '/lang') return screen(env, chat, T.en.choose_lang, LANG_PICKER);
 
   // Payment screenshots
-  if (user.status === 'awaiting_proof' && (msg.photo || msg.document)) {
+  if (user.flow === 'awaiting_proof' && (msg.photo || msg.document)) {
     return submitProof(env, cfg, msg, user);
   }
-  if (user.status === 'pending' && (msg.photo || msg.document)) {
-    return send(env, chat_id, t(lang, 'under_review'));
-  }
-  if (user.status === 'awaiting_proof') {
-    return send(env, chat_id, t(lang, 'send_screenshot'));
-  }
+  if (user.flow === 'pending') return screen(env, chat, t(lang, 'under_review'), menuMarkup(lang));
+  if (user.flow === 'awaiting_proof') return screen(env, chat, t(lang, 'send_shot'), backMenu(lang));
 
-  return send(env, chat_id, t(lang, 'use_menu'), { reply_markup: menuFor(lang) });
+  return showWelcome(env, cfg, chat, uid);
 }
 
-// ---------- button presses ----------
+// ---------- buttons ----------
 async function onCallback(q, env) {
   const cfg = await getConfig(env);
-  const [action, arg] = (q.data || '').split(':');
   const fromId = String(q.from.id);
-  const chat_id = q.from.id;
+  const chat = q.from.id;
+  const p = (q.data || '').split(':');
+  const action = p[0];
+  const a1 = p[1];
+  const a2 = p[2];
+  const admin = isAdminId(env, cfg, fromId);
 
-  // Admin panel
-  if (action === 'a') {
-    if (!allAdmins(env, cfg).includes(fromId)) {
+  // Admin-only actions
+  if (action === 'a' || action === 'ok' || action === 'no') {
+    if (!admin) {
       return API(env, 'answerCallbackQuery', { callback_query_id: q.id, text: 'Not allowed', show_alert: true });
     }
     await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-    return adminCallback(q, env, cfg);
+    if (action === 'a') return adminCallback(env, cfg, q, [a1, a2, p[3]]);
+    return handlePayment(env, cfg, q, action, a1);
   }
 
-  // Student menu
-  if (action === 'buy') {
-    await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-    return startBuy(env, cfg, chat_id, fromId);
-  }
-  if (action === 'status') {
-    await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-    const user = await getUser(env, fromId);
-    return send(env, chat_id, statusText(cfg, user), { reply_markup: menuFor(user.lang || 'en') });
-  }
-  if (action === 'link') {
-    await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-    return sendMyLink(env, cfg, chat_id, fromId);
-  }
+  await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
 
-  // Language
-  if (action === 'lang') {
-    await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-    const user = await getUser(env, fromId);
-    if (arg === 'en' || arg === 'am') {
-      await putUser(env, fromId, { ...user, lang: arg });
-      await send(env, chat_id, t(arg, 'lang_set'));
-      return sendWelcome(env, cfg, chat_id, arg);
+  switch (action) {
+    case 'menu':
+      return showWelcome(env, cfg, chat, fromId);
+    case 'buy':
+      return showBuy(env, cfg, chat, fromId);
+    case 'trk':
+      return chooseTrack(env, cfg, chat, fromId, a1);
+    case 'samp':
+      return showSamplePicker(env, cfg, chat, fromId);
+    case 'sp':
+      return showSubjectPicker(env, cfg, chat, fromId, a1);
+    case 'ss':
+      return showSample(env, cfg, chat, fromId, a1, a2);
+    case 'link':
+      return showLink(env, cfg, chat, fromId);
+    case 'status': {
+      const user = await getUser(env, fromId);
+      return screen(env, chat, statusLine(cfg, user, user.lang || 'en'), menuMarkup(user.lang || 'en'));
     }
-    return send(env, chat_id, t(user.lang || 'en', 'pick_lang'), { reply_markup: LANG_PICKER });
-  }
-
-  // Track chosen before paying
-  if (action === 'trk') {
-    await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-    if (!validTrack(cfg, arg)) return;
-    const user = await getUser(env, fromId);
-    const lang = user.lang || 'en';
-    if (user.status === 'pending') return send(env, chat_id, t(lang, 'under_review'));
-    if (isActive(user) && daysLeft(user) > RENEW_WINDOW_DAYS) {
-      return send(env, chat_id, t(lang, 'already_active', { date: fmtDate(user.expires), window: RENEW_WINDOW_DAYS }), { reply_markup: menuFor(lang) });
+    case 'lang': {
+      if (a1 === 'en' || a1 === 'am') {
+        const user = await getUser(env, fromId);
+        await putUser(env, fromId, { ...user, lang: a1 });
+        return showWelcome(env, cfg, chat, fromId);
+      }
+      return screen(env, chat, T.en.choose_lang, LANG_PICKER);
     }
-    await putUser(env, fromId, { ...user, track: arg, status: 'awaiting_proof' });
-    return send(env, chat_id, paymentText(cfg, arg, lang));
-  }
-
-  // Payment approve / reject (admins only)
-  if (action === 'ok' || action === 'no') {
-    if (!allAdmins(env, cfg).includes(fromId)) {
-      return API(env, 'answerCallbackQuery', { callback_query_id: q.id, text: 'Not allowed', show_alert: true });
-    }
-    await API(env, 'answerCallbackQuery', { callback_query_id: q.id });
-
-    const user = await getUser(env, arg);
-    if (user.status !== 'pending') {
-      return send(env, chat_id, `ℹ️ ${esc(arg)} is already ${esc(user.status)}. Nothing to do.`);
-    }
-
-    if (action === 'ok') {
-      const r = await grantAccess(env, cfg, arg, cfg.accessDays);
-      return send(env, chat_id, r === 'ok' ? `✅ Approved ${esc(arg)}` : `⚠️ ${esc(arg)} has no track.`);
-    }
-
-    // Reject: keep any access the user still has
-    const restored = user.expires > now() ? 'active' : 'none';
-    await putUser(env, arg, { ...user, status: restored });
-    await send(env, arg, t(user.lang || 'en', 'rejected'));
-    return send(env, chat_id, `❌ Rejected ${esc(arg)}`);
+    default:
+      return;
   }
 }
 
@@ -735,6 +934,7 @@ async function onJoinRequest(req, env) {
   const cfg = await getConfig(env);
   const uid = String(req.from.id);
   const user = await getUser(env, uid);
+  const lang = user.lang || 'en';
   const ok = isActive(user) && validTrack(cfg, user.track) && String(cfg.groups[user.track]) === String(req.chat.id);
 
   await API(env, ok ? 'approveChatJoinRequest' : 'declineChatJoinRequest', {
@@ -742,7 +942,7 @@ async function onJoinRequest(req, env) {
     user_id: req.from.id,
   });
   if (!ok) {
-    await send(env, req.user_chat_id || req.from.id, t(user.lang || 'en', 'no_access'), { reply_markup: menuFor(user.lang || 'en') });
+    await screen(env, req.user_chat_id || req.from.id, t(lang, 'no_access'), menuMarkup(lang));
   }
 }
 
